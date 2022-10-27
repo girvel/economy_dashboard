@@ -2,3 +2,5 @@ dash~=2.6.2
 fire~=0.4.0
 pandas~=1.5.1
 PyYAML~=6.0
+dash-bootstrap-components~=1.2.1
+dash-bootstrap-templates~=1.0.7
