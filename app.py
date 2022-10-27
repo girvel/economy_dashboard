@@ -4,7 +4,6 @@ import dash_bootstrap_components as dbc
 import dash_bootstrap_templates as dbt
 import yaml
 from dash import Dash, html, dcc, Output, Input
-from fire import Fire
 import pandas
 from tiny_storage import Unit
 import plotly.express as px
@@ -87,9 +86,5 @@ def display_page(pathname):
     ]
 
 
-def main(debug):
-    app.run_server(debug=debug)
-
-
 if __name__ == "__main__":
-    Fire(main)
+    app.run()
