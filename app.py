@@ -5,7 +5,7 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 import dash_bootstrap_templates as dbt
 import yaml
-from dash import Dash, html, dcc, Output, Input
+from dash import Dash, html, dcc, Output, Input, State
 import pandas
 from tiny_storage import Unit
 import plotly.express as px
@@ -50,6 +50,7 @@ dbt.load_figure_template("LUX")
 app = Dash(__name__, external_stylesheets=[dbc.themes.LUX])
 app.layout = html.Div([
     dcc.Location(id='url', refresh=True),
+    dcc.Store(id='df'),
     dcc.DatePickerRange(
         id='date_range',
         initial_visible_month=date.today(),
@@ -59,19 +60,10 @@ app.layout = html.Div([
 
 
 @app.callback(
-    Output('main', 'children'),
-    [Input('url', 'pathname'),
-     Input('date_range', 'start_date'),
-     Input('date_range', 'end_date')],
+    Output('df', 'data'),
+    [Input('url', 'pathname')]
 )
-def display_page(pathname, start_date, end_date):
-    start_date = start_date \
-        and pandas.Timestamp(start_date) \
-        or pandas.Timestamp.min
-    end_date = end_date \
-        and pandas.Timestamp(end_date) \
-        or pandas.Timestamp.max
-
+def query_and_save_df(pathname):
     os.system(
         "wsl -e scp -i /mnt/d/Downloads/Main.pem "
         "ubuntu@aws.girvel.xyz:/mine/data/transactions.yaml "
@@ -84,6 +76,35 @@ def display_page(pathname, start_date, end_date):
 
     df = df[["date", "comment", "amount"]]
     df = df.sort_values(["date"], ascending=False)
+
+    return df.to_json(orient="records")
+
+
+@app.callback(
+    [Output('date_range', 'min_date_allowed'),
+     Output('date_range', 'max_date_allowed'),
+     Output('date_range', 'start_date'),
+     Output('date_range', 'end_date')],
+    [Input('df', 'data')]
+)
+def determine_date_limits(df):
+    df = pandas.read_json(df)
+
+    return [min(df["date"]), max(df["date"])] * 2
+
+
+@app.callback(
+    Output('main', 'children'),
+    [Input('date_range', 'start_date'),
+     Input('date_range', 'end_date'),
+     State('df', 'data'),],
+)
+def display_page(start_date, end_date, df):
+    df = pandas.read_json(df)
+
+    start_date = pandas.Timestamp(start_date)
+    end_date = pandas.Timestamp(end_date)
+
     df = df[(start_date <= df["date"]) & (df["date"] <= end_date)]
 
     if len(df) == 0:
