@@ -1,3 +1,5 @@
+import os
+from datetime import date
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
@@ -48,19 +50,45 @@ dbt.load_figure_template("LUX")
 app = Dash(__name__, external_stylesheets=[dbc.themes.LUX])
 app.layout = html.Div([
     dcc.Location(id='url', refresh=True),
+    dcc.DatePickerRange(
+        id='date_range',
+        initial_visible_month=date.today(),
+    ),
     html.Div(id="main"),
 ])
 
 
 @app.callback(
     Output('main', 'children'),
-    [Input('url', 'pathname')],
+    [Input('url', 'pathname'),
+     Input('date_range', 'start_date'),
+     Input('date_range', 'end_date')],
 )
-def display_page(pathname):
+def display_page(pathname, start_date, end_date):
+    start_date = start_date \
+        and pandas.Timestamp(start_date) \
+        or pandas.Timestamp.min
+    end_date = end_date \
+        and pandas.Timestamp(end_date) \
+        or pandas.Timestamp.max
+
+    os.system(
+        "wsl -e scp -i /mnt/d/Downloads/Main.pem "
+        "ubuntu@aws.girvel.xyz:/mine/data/transactions.yaml "
+        "transactions.yaml"
+    )
+
     df = pandas.json_normalize(yaml.safe_load(
-    Path(transactions_config("journal_file").pull("")).read_text()
-))
+        Path("transactions.yaml").read_text()
+    ))
+
     df = df[["date", "comment", "amount"]]
+    df = df.sort_values(["date"], ascending=False)
+    df = df[(start_date <= df["date"]) & (df["date"] <= end_date)]
+
+    if len(df) == 0:
+        return "No transactions"
+
     df["category"] = df["comment"].map(lambda c: categories.get(c, c))
     dt = max(df['date']) - min(df['date'])
 
@@ -87,4 +115,4 @@ def display_page(pathname):
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
