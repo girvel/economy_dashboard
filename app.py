@@ -59,7 +59,12 @@ def polish(df):
 transactions_config = Unit("todoist_transactions")
 
 dbt.load_figure_template("LUX")
-app = Dash(__name__, external_stylesheets=[dbc.themes.LUX])
+app = Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.LUX],
+    suppress_callback_exceptions=True
+)
+
 app.layout = html.Div([
     dcc.Location(id='url', refresh=True),
     dcc.Store(id='df'),
@@ -102,7 +107,12 @@ def query_and_save_df(pathname):
 def determine_date_limits(df):
     df = pandas.read_json(df)
 
-    return [min(df["date"]), max(df["date"])] * 2
+    return [
+        min(df["date"]),
+        max(df["date"]),
+        df[df["comment"] == "salary"]["date"].iloc[0],
+        max(df["date"]),
+    ]
 
 
 @app.callback(
@@ -129,8 +139,14 @@ def display_page(start_date, end_date, df):
     total_spent = sum(spent.df['amount'])
     balance = sum(df["amount"])
     income = 801_970 - 332_000
+    all_categories = sorted(set(spent.df['category']))
+    uncontrolled_categories = {'Clothes', 'Drugs', 'Transportation'}
+    controlled_categories = sorted(
+        set(all_categories) - uncontrolled_categories
+    )
 
     return [
+        dcc.Store(id='limited_df', data=df.to_json(orient="records")),
         html.H3("Transactions"),
         html.P(f"Balance is {balance:,} AMD"),
         html.P(f"{dt.days} days, {total_spent:,} AMD, {total_spent / dt.days:,.0f} AMD/day"),
@@ -143,17 +159,38 @@ def display_page(start_date, end_date, df):
                 title="Categories",
             )
         ),
+        dcc.Checklist(
+            options=all_categories,
+            value=controlled_categories,
+            labelStyle={
+                'margin-right': '10px',
+            },
+            id='categories_checklist'
+        ),
         dcc.Graph(
-            figure=px.line(
-                spent.by_day(),
-                x="date",
-                y="amount",
-                line_shape="spline",
-                title="By day",
-            )
+            id='spent_by_day',
         ),
         generate_table(polish(df)),
     ]
+
+
+@app.callback(
+    Output('spent_by_day', 'figure'),
+    [Input('categories_checklist', 'value'),
+     State('limited_df', 'data')]
+)
+def render_line_graph(categories, df):
+    df = pandas.read_json(df)
+    df = df[df["category"].isin(categories)]
+    spent = Spendings(df)
+
+    return px.line(
+        spent.by_day(),
+        x="date",
+        y="amount",
+        line_shape="spline",
+        title="By day",
+    )
 
 
 if __name__ == "__main__":
