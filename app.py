@@ -11,18 +11,6 @@ from tiny_storage import Unit
 import plotly.express as px
 
 
-def generate_table(dataframe):
-    return html.Table([
-        html.Thead(
-            html.Tr([html.Th(col) for col in dataframe.columns])
-        ),
-        html.Tbody([
-            html.Tr([
-                html.Td(dataframe.iloc[i][col]) for col in dataframe.columns
-            ]) for i in range(len(dataframe))
-        ])
-    ])
-
 categories = {
     "tran": "Transportation",
     "groc": "Groceries & etc",
@@ -61,7 +49,7 @@ transactions_config = Unit("todoist_transactions")
 dbt.load_figure_template("LUX")
 app = Dash(
     __name__,
-    external_stylesheets=[dbc.themes.LUX],
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
     suppress_callback_exceptions=True
 )
 
@@ -153,7 +141,7 @@ def display_page(start_date, end_date, df):
         html.P(f"Expected {income / 30.5 * dt.days:,.0f} AMD, {income / 30.5:,.0f} AMD/day"),
         dbc.Row([
             dbc.Col([
-                generate_table(polish(df)),
+                dbc.Table.from_dataframe(polish(df)),
             ]),
             dbc.Col([
                 dcc.Graph(
@@ -164,12 +152,10 @@ def display_page(start_date, end_date, df):
                         title="Categories",
                     )
                 ),
-                dcc.Checklist(
-                    options=all_categories,
+                dbc.Checklist(
+                    options=[{"label": c, "value": c} for c in all_categories],
                     value=controlled_categories,
-                    labelStyle={
-                        'margin-right': '10px',
-                    },
+                    inline=True,
                     id='categories_checklist'
                 ),
                 dcc.Graph(
