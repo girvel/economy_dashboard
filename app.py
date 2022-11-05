@@ -1,5 +1,5 @@
 import os
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
@@ -31,13 +31,25 @@ categories = {
     "clothes": "Clothes",
 }
 
-def total_spendings(df):
-    df = df.copy()
+class Spendings:
+    def __init__(self, df):
+        df = df.copy()
+        df = df[df["amount"] < 0]
+        df["amount"] *= -1
+        self.df = df
 
-    df = df[df["amount"] < 0]
-    df["amount"] *= -1
-    df = df.groupby(["category"]).sum()
-    return df.reset_index(level=0)
+    def by_category(self):
+        df = self.df.copy()
+
+        df = df.groupby(["category"]).sum()
+        return df.reset_index(level=0)
+
+    def by_day(self):
+        df = self.df.copy()
+
+        df["date"] = df["date"].dt.date
+        df = df.groupby(["date"]).sum(numeric_only=True)
+        return df.reset_index(level=0)
 
 def polish(df):
     df = df.copy()
@@ -103,7 +115,7 @@ def display_page(start_date, end_date, df):
     df = pandas.read_json(df)
 
     start_date = pandas.Timestamp(start_date)
-    end_date = pandas.Timestamp(end_date)
+    end_date = pandas.Timestamp(end_date) + timedelta(days=1)
 
     df = df[(start_date <= df["date"]) & (df["date"] <= end_date)]
 
@@ -111,12 +123,12 @@ def display_page(start_date, end_date, df):
         return "No transactions"
 
     df["category"] = df["comment"].map(lambda c: categories.get(c, c))
-    dt = max(df['date']) - min(df['date'])
+    dt = end_date - start_date
 
-    spendings = total_spendings(df)
-    total_spent = sum(spendings['amount'])
+    spent = Spendings(df)
+    total_spent = sum(spent.df['amount'])
     balance = sum(df["amount"])
-    income = 651_970 - 332_000
+    income = 801_970 - 332_000
 
     return [
         html.H3("Transactions"),
@@ -125,10 +137,19 @@ def display_page(start_date, end_date, df):
         html.P(f"Expected {income / 30.5 * dt.days:,.0f} AMD, {income / 30.5:,.0f} AMD/day"),
         dcc.Graph(
             figure=px.pie(
-                spendings,
+                spent.by_category(),
                 values="amount",
                 names="category",
-                title="Spendings",
+                title="Categories",
+            )
+        ),
+        dcc.Graph(
+            figure=px.line(
+                spent.by_day(),
+                x="date",
+                y="amount",
+                line_shape="spline",
+                title="By day",
             )
         ),
         generate_table(polish(df)),
