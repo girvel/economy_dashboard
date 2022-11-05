@@ -151,26 +151,32 @@ def display_page(start_date, end_date, df):
         html.P(f"Balance is {balance:,} AMD"),
         html.P(f"{dt.days} days, {total_spent:,} AMD, {total_spent / dt.days:,.0f} AMD/day"),
         html.P(f"Expected {income / 30.5 * dt.days:,.0f} AMD, {income / 30.5:,.0f} AMD/day"),
-        dcc.Graph(
-            figure=px.pie(
-                spent.by_category(),
-                values="amount",
-                names="category",
-                title="Categories",
-            )
-        ),
-        dcc.Checklist(
-            options=all_categories,
-            value=controlled_categories,
-            labelStyle={
-                'margin-right': '10px',
-            },
-            id='categories_checklist'
-        ),
-        dcc.Graph(
-            id='spent_by_day',
-        ),
-        generate_table(polish(df)),
+        dbc.Row([
+            dbc.Col([
+                generate_table(polish(df)),
+            ]),
+            dbc.Col([
+                dcc.Graph(
+                    figure=px.pie(
+                        spent.by_category(),
+                        values="amount",
+                        names="category",
+                        title="Categories",
+                    )
+                ),
+                dcc.Checklist(
+                    options=all_categories,
+                    value=controlled_categories,
+                    labelStyle={
+                        'margin-right': '10px',
+                    },
+                    id='categories_checklist'
+                ),
+                dcc.Graph(
+                    id='spent_by_day',
+                ),
+            ]),
+        ]),
     ]
 
 
