@@ -17,6 +17,12 @@ categories = {
     "cafe": "Cafe",
     "meds": "Drugs",
     "clothes": "Clothes",
+    "util": "Rent",
+    "rent": "Rent",
+    "cup": "Home",
+    "tech": "Home",
+    "pty": "Party",
+    "save": "Savings",
 }
 
 class Spendings:
@@ -37,14 +43,17 @@ class Spendings:
 
         df["date"] = df["date"].dt.date
         df = df.groupby(["date"]).sum(numeric_only=True)
-        return df.reset_index(level=0)
+        df = df.reindex(
+            pandas.date_range(min(df.index), max(df.index)),
+            fill_value=0
+        )
+
+        return df.reset_index(names=["date"])
 
 def polish(df):
     df = df.copy()
     df["date"] = df["date"].dt.strftime("%Y.%m.%d %H:%M")
     return df
-
-transactions_config = Unit("todoist_transactions")
 
 dbt.load_figure_template("LUX")
 app = Dash(
@@ -112,6 +121,8 @@ def determine_date_limits(df):
 def display_page(start_date, end_date, df):
     df = pandas.read_json(df)
 
+    balance = sum(df["amount"])
+
     start_date = pandas.Timestamp(start_date)
     end_date = pandas.Timestamp(end_date) + timedelta(days=1)
 
@@ -125,10 +136,9 @@ def display_page(start_date, end_date, df):
 
     spent = Spendings(df)
     total_spent = sum(spent.df['amount'])
-    balance = sum(df["amount"])
     income = 801_970 - 332_000
     all_categories = sorted(set(spent.df['category']))
-    uncontrolled_categories = {'Clothes', 'Drugs', 'Transportation'}
+    uncontrolled_categories = {'Clothes', 'Drugs', 'Transportation', 'Rent'}
     controlled_categories = sorted(
         set(all_categories) - uncontrolled_categories
     )
