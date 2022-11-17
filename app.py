@@ -7,22 +7,30 @@ import dash_bootstrap_templates as dbt
 import yaml
 from dash import Dash, html, dcc, Output, Input, State
 import pandas
-from tiny_storage import Unit
 import plotly.express as px
 
 
 categories = {
     "tran": "Transportation",
-    "groc": "Groceries & etc",
+    "groc": "Groceries",
     "cafe": "Cafe",
-    "meds": "Drugs",
+    "meds": "Health",
     "clothes": "Clothes",
     "util": "Rent",
     "rent": "Rent",
     "cup": "Home",
     "tech": "Home",
-    "pty": "Party",
+    "pty": "Caprice",
+    "game": "Caprice",
     "save": "Savings",
+    "lost": "Unaccounted",
+    "lenses": "Health",
+    "docs": "Taxes, documents & other",
+}
+
+uncontrolled_categories = {
+    'Clothes', 'Health', 'Transportation', 'Rent', 'Savings',
+    "Taxes, documents & other"
 }
 
 class Spendings:
@@ -52,7 +60,11 @@ class Spendings:
 
 def polish(df):
     df = df.copy()
+
     df["date"] = df["date"].dt.strftime("%Y.%m.%d %H:%M")
+    del df["comment"]
+    df = df[["date", "amount", "category"]]
+
     return df
 
 dbt.load_figure_template("LUX")
@@ -88,7 +100,6 @@ def query_and_save_df(pathname):
         Path("transactions.yaml").read_text()
     ))
 
-    df = df[["date", "comment", "amount"]]
     df = df.sort_values(["date"], ascending=False)
 
     return df.to_json(orient="records")
@@ -135,42 +146,61 @@ def display_page(start_date, end_date, df):
     dt = end_date - start_date
 
     spent = Spendings(df)
-    total_spent = sum(spent.df['amount'])
-    income = 801_970 - 332_000
     all_categories = sorted(set(spent.df['category']))
-    uncontrolled_categories = {'Clothes', 'Drugs', 'Transportation', 'Rent'}
     controlled_categories = sorted(
         set(all_categories) - uncontrolled_categories
     )
+
+    udf = spent.df.copy()
+    udf = udf[udf["category"].isin(uncontrolled_categories)]
+    uncontrolled_spent = sum(udf["amount"])
+
+    sdf = spent.df.copy()
+    sdf = sdf[sdf["category"].isin(controlled_categories)]
+    controlled_spent = sum(sdf['amount'])
+
+    idf = df.copy()
+    idf = df[df["amount"] > 0]
+    controlled_income = sum(idf["amount"]) - uncontrolled_spent
 
     return [
         dcc.Store(id='limited_df', data=df.to_json(orient="records")),
         html.H3("Transactions"),
         html.P(f"Balance is {balance:,} AMD"),
-        html.P(f"{dt.days} days, {total_spent:,} AMD, {total_spent / dt.days:,.0f} AMD/day"),
-        html.P(f"Expected {income / 30.5 * dt.days:,.0f} AMD, {income / 30.5:,.0f} AMD/day"),
+        html.P(f"{dt.days} days, {controlled_spent:,} AMD, {controlled_spent / dt.days:,.0f} AMD/day"),
+        html.P(f"Expected {controlled_income / 30.5 * dt.days:,.0f} AMD, {controlled_income / 30.5:,.0f} AMD/day"),
+        html.P(f"Uncontrollable spendings: {uncontrolled_spent:,} AMD"),
         dbc.Row([
             dbc.Col([
                 dbc.Table.from_dataframe(polish(df)),
             ]),
             dbc.Col([
-                dcc.Graph(
-                    figure=px.pie(
-                        spent.by_category(),
-                        values="amount",
-                        names="category",
-                        title="Categories",
-                    )
-                ),
-                dbc.Checklist(
-                    options=[{"label": c, "value": c} for c in all_categories],
-                    value=controlled_categories,
-                    inline=True,
-                    id='categories_checklist'
-                ),
-                dcc.Graph(
-                    id='spent_by_day',
-                ),
+                html.Div([
+                    dbc.Checklist(
+                        options=[
+                            {"label": "Include uncontrolled",
+                             "value": "uncontrolled"},
+                        ],
+                        value=[],
+                        inline=True,
+                        id='categories_pie_flags'
+                    ),
+                    dcc.Graph(
+                        id='categories_pie'
+                    ),
+                ]),
+
+                html.Div([
+                    dbc.Checklist(
+                        options=[{"label": c, "value": c} for c in all_categories],
+                        value=controlled_categories,
+                        inline=True,
+                        id='categories_checklist'
+                    ),
+                    dcc.Graph(
+                        id='spent_by_day',
+                    ),
+                ]),
             ]),
         ]),
     ]
@@ -192,6 +222,27 @@ def render_line_graph(categories, df):
         y="amount",
         line_shape="spline",
         title="By day",
+    )
+
+
+@app.callback(
+    Output('categories_pie', 'figure'),
+    [Input('categories_pie_flags', 'value'),
+     State('limited_df', 'data')]
+)
+def render_categories_pie(flags, df):
+    df = pandas.read_json(df)
+
+    if "uncontrolled" not in flags:
+        df = df[~df["category"].isin(uncontrolled_categories)]
+
+    spent = Spendings(df)
+
+    return px.pie(
+        spent.by_category(),
+        values="amount",
+        names="category",
+        title="Categories",
     )
 
 
